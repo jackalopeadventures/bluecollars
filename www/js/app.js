@@ -5,7 +5,17 @@
 // the 2nd parameter is an array of 'requires'
 var app = angular.module('starter', ['ionic', 'ngCordova']);
 
-app.run(function($ionicPlatform) {
+app.constant('AUTH_EVENTS', {
+  notAuthenticated: 'auth-not-authenticated',
+  notAuthorized: 'auth-not-authorized'
+})
+
+app.constant('USER_ROLES', {
+  admin: 'admin_role',
+  public: 'public_role'
+});
+
+app.run(function($ionicPlatform, $httpBackend) {
   $ionicPlatform.ready(function() {
     // Hide the accessory bar by default (remove this to show the accessory bar above the keyboard
     // for form inputs)
@@ -15,57 +25,79 @@ app.run(function($ionicPlatform) {
     if (window.StatusBar) {
       StatusBar.styleDefault();
     }
+    $httpBackend.whenGET('http://localhost:8100/valid')
+      .respond({
+        message: 'This is my valid response!'
+      });
+    $httpBackend.whenGET('http://localhost:8100/notauthenticated')
+      .respond(401, {
+        message: "Not Authenticated"
+      });
+    $httpBackend.whenGET('http://localhost:8100/notauthorized')
+      .respond(403, {
+        message: "Not Authorized"
+      });
+    $httpBackend.whenGET(/templates\/\w+.*/).passThrough();
+
   });
 });
-app.config(function($stateProvider, $urlRouterProvider) {
-
+app.config(function($stateProvider, $urlRouterProvider, USER_ROLES) {
   $stateProvider
-    .state('map', {
+    .state('login', {
+      url: '/login',
+      templateUrl: 'templates/login.html',
+      controller: 'LoginCtrl',
+      controllerAs: 'vm'
+    })
+    .state('main', {
       url: '/',
-      templateUrl: 'templates/map.html',
-      controller: 'MapCtrl'
+      abstract: true,
+      templateUrl: 'templates/main.html'
+    })
+    .state('main.dash', {
+      url: 'main/dash',
+      views: {
+        'dash-tab': {
+          templateUrl: 'templates/dashboard.html',
+          controller: 'DashCtrl',
+          controllerAs: 'vm'
+        }
+      }
+    })
+    .state('main.public', {
+      url: 'main/public',
+      views: {
+        'public-tab': {
+          templateUrl: 'templates/public.html'
+        }
+      }
+    })
+    .state('main.map', {
+      url: 'main/map',
+      views: {
+        'dash-tab': {
+          templateUrl: 'templates/map.html',
+          controller: 'MapCtrl',
+          controllerAs: 'vm'
+        }
+      }
+    })
+    .state('main.admin', {
+      url: 'main/admin',
+      views: {
+        'admin-tab': {
+          templateUrl: 'templates/admin.html',
+          controllerAs: 'vm'
+        }
+      },
+      data: {
+        authorizedRoles: [USER_ROLES.admin]
+      }
     });
 
-  $urlRouterProvider.otherwise("/");
-
-})
-
-
-
-app.controller('MapCtrl', function($scope, $state, $cordovaGeolocation) {
-  var options = {timeout: 10000, enableHighAccuracy: true};
-
-  $cordovaGeolocation.getCurrentPosition(options).then(function(position){
-
-    var latLng = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-
-    var mapOptions = {
-      center: latLng,
-      zoom: 15,
-      mapTypeId: google.maps.MapTypeId.ROADMAP
-    };
-
-    $scope.map = new google.maps.Map(document.getElementById("map"), mapOptions);
-    //Wait until the map is loaded
-    google.maps.event.addListenerOnce($scope.map, 'idle', function(){
-
-      var marker = new google.maps.Marker({
-          map: $scope.map,
-          animation: google.maps.Animation.DROP,
-          position: latLng
-      });
-
-      var infoWindow = new google.maps.InfoWindow({
-          content: "Here I am!"
-      });
-
-      google.maps.event.addListener(marker, 'click', function () {
-          infoWindow.open($scope.map, marker);
-      });
-
-    });
-
-  }, function(error){
-    console.log("Could not get location");
+  // Thanks to Ben Noblet!
+  $urlRouterProvider.otherwise(function($injector, $location) {
+    var $state = $injector.get("$state");
+    $state.go("main.dash");
   });
-});
+})
